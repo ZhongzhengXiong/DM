@@ -1,30 +1,24 @@
-/**
- * Created by XiongZZ on 2017/5/31.
- */
-
-import com.sun.jmx.remote.internal.ArrayQueue;
-
 import java.util.*;
 import java.util.regex.*;
 
 
 public class Main {
-    static final String p1 = "^[A-Z]{1}_\\{[0-9]+\\}$";
-    static final String p2 = "^[A-Z]{1}$";
+    private static final String p1 = "^[A-Z]{1}_\\{[0-9]+\\}$";
+    private static final String p2 = "^[A-Z]{1}$";
 
     public static void main(String args[]) {
-        String expression = " (((A \\imply B) \\or (C \\or D)) \\and (A \\or B))";
+        String expression = " (((A \\imply B) \\imply A) \\imply A)";
         expression = expression.replaceAll(" ", "");
         if(isWelldefined(expression)){
             PropositionNode root = new PropositionNode(expression, null, null, null, false);
             root = cst(root);
-            System.out.println(root.proposition);
+            printCst(root);
         }
         else
             System.out.println("wrong");
     }
 
-    public static PropositionNode cst(PropositionNode root) {
+    private static PropositionNode cst(PropositionNode root) {
         // ArrayDeque<PropositionNode> queue = new ArrayDeque<>();
         LinkedList<PropositionNode> unreducedNodes = new LinkedList<>();
         unreducedNodes.add(root);
@@ -95,7 +89,7 @@ public class Main {
                 leftProposition = proposition.substring(1, index);
             }
             if (!type.equals("eq")  && !type.equals("not")) {
-                if (node.label == true)
+                if (node.label)
                     type = type + "T";
                 else
                     type = type + "F";
@@ -109,7 +103,7 @@ public class Main {
     }
 
 
-    public static boolean isWelldefined(String expression) {
+    private static boolean isWelldefined(String expression) {
         if (Pattern.matches(p1, expression) || Pattern.matches(p2, expression))
             return true;
         int len = expression.length();
@@ -120,8 +114,8 @@ public class Main {
             }
             // A ^ B
             int index = 0;
-            String leftExpression = " ";
-            String rightExpression = " ";
+            String leftExpression;
+            String rightExpression;
             if (expression.charAt(1) != '(') {
                 index = getRightExpressionIndex(expression, index);
                 if (index == -1)
@@ -162,7 +156,7 @@ public class Main {
     }
 
 
-    public static int getLeftExpressionIndex(String expression) {
+    private static int getLeftExpressionIndex(String expression) {
         int leftP = 0;
         int len = expression.length();
         int index;
@@ -181,21 +175,22 @@ public class Main {
         return index;
     }
 
-    public static int getRightExpressionIndex(String expression, int index) {
-        if ((index = expression.indexOf("\\and", index)) != -1) {
-            index = index + 4;
-        } else if ((index = expression.indexOf("\\or", index)) != -1) {
-            index = index + 3;
-        } else if ((index = expression.indexOf("\\imply", index)) != -1) {
-            index = index + 6;
-        } else if ((index = expression.indexOf("\\eq", index)) != -1) {
-            index = index + 3;
+    private static int getRightExpressionIndex(String expression, int index) {
+        int index1, index2, index3, index4 ;
+        if ((index1 = expression.indexOf("\\and", index)) != -1) {
+            index = index1 + 4;
+        } else if ((index2 = expression.indexOf("\\or", index)) != -1) {
+            index = index2 + 3;
+        } else if ((index3 = expression.indexOf("\\imply", index)) != -1) {
+            index = index3 + 6;
+        } else if ((index4 = expression.indexOf("\\eq", index)) != -1) {
+            index = index4 + 3;
         } else
             index = -1;
         return index;
     }
 
-    public static void reduce(PropositionNode root, PropositionNode node, LinkedList<PropositionNode> unreducedNodes) {
+    private static void reduce(PropositionNode root, PropositionNode node, LinkedList<PropositionNode> unreducedNodes) {
 
 
         if (root.proposition.equals(node.proposition) && root.label == node.label) {
@@ -242,7 +237,7 @@ public class Main {
                 break;
             }
         }
-        if (root.left == null && root.right == null && !root.isConflicted) {
+        if (root.left == null && root.right == null && !root.isConflicted && node.isReduced) {
             //           PropositionNode copyNode = node.copy();
             root.left = node;
             node.father = root;
@@ -273,10 +268,10 @@ public class Main {
                 case "eq": {
                     if (!node.left.isConflicted)
                         unreducedNodes.add(node.left);
-                    if (!node.left.left.isConflicted)
-                        unreducedNodes.add(node.left.left);
                     if (!node.right.isConflicted)
                         unreducedNodes.add(node.right);
+                    if (!node.left.left.isConflicted)
+                        unreducedNodes.add(node.left.left);
                     if (!node.right.left.isConflicted)
                         unreducedNodes.add(node.right.left);
                     break;
@@ -293,7 +288,7 @@ public class Main {
     }
 
 
-    public static PropositionNode atomicT(PropositionNode node, String leftProposition, String rightProposition) {
+    private static PropositionNode atomicT(PropositionNode node, String leftProposition, String rightProposition) {
         switch (node.type) {
             case "implyT": {
                 PropositionNode lNode = new PropositionNode(leftProposition, false, false, "", false);
@@ -352,7 +347,7 @@ public class Main {
                 node.right = lNode2;
                 lNode1.father = node;
                 lNode2.father = node;
-                if (node.label == true) {
+                if (node.label) {
                     lNode1.left = rNode1;
                     lNode2.left = rNode2;
                     rNode1.father = lNode1;
@@ -369,8 +364,27 @@ public class Main {
         return node;
     }
 
-    public static void printCst(PropositionNode root){
+    private static void printCst(PropositionNode root){
+        ArrayDeque<PropositionNode> deque = new ArrayDeque<>();
+        PropositionNode nullNode = new PropositionNode("", null, null, null, false);
+        deque.add(root);
+        deque.add(nullNode);
+        while(deque.size() != 1){
+            PropositionNode node = deque.removeFirst();
+            if(node == nullNode){
+                deque.add(nullNode);
+                System.out.println();
+                continue;
+            }
 
+            System.out.print(node.label + node.proposition + "  ");
+            if(node.left != null){
+                deque.add(node.left);
+                if(node.right != null){
+                    deque.add(node.right);
+                }
 
+            }
+        }
     }
 }
