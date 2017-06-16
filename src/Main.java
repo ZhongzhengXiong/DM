@@ -146,17 +146,26 @@ public class Main {
     }
 
     private static int getRightExpressionIndex(String expression, int index) {
-        int index1, index2, index3, index4;
-        if ((index1 = expression.indexOf("\\and", index)) != -1) {
-            index = index1 + 4;
-        } else if ((index2 = expression.indexOf("\\or", index)) != -1) {
-            index = index2 + 3;
-        } else if ((index3 = expression.indexOf("\\imply", index)) != -1) {
-            index = index3 + 6;
-        } else if ((index4 = expression.indexOf("\\eq", index)) != -1) {
-            index = index4 + 3;
-        } else
-            index = -1;
+        int[] indexArr = new int[4];
+        String[] strArr = {"\\and", "\\or", "\\imply", "\\eq"};
+        int min = 0;
+        int minIndex = 0;
+        for(int i = 0; i < 4; i++){
+            indexArr[i] = expression.indexOf(strArr[i], index);
+            if(indexArr[i] > 0){
+                min = indexArr[i];
+                minIndex = i;
+            }
+        }
+        if(min == 0)
+            return -1;
+        for(int i = 0; i < 4; i++){
+            if(indexArr[i] > 0 && indexArr[i] < min){
+                min = indexArr[i];
+                minIndex = i;
+            }
+        }
+        index = indexArr[minIndex] + strArr[minIndex].length();
         return index;
     }
 
