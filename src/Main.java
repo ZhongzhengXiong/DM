@@ -1,107 +1,78 @@
+import java.io.*;
 import java.util.*;
 import java.util.regex.*;
-
 
 public class Main {
     private static final String p1 = "^[A-Z]{1}_\\{[0-9]+\\}$";
     private static final String p2 = "^[A-Z]{1}$";
 
-    public static void main(String args[]) {
-        String expression = " (((A \\imply B) \\imply A) \\imply A)";
-        expression = expression.replaceAll(" ", "");
-        if(isWelldefined(expression)){
+    public static void main(String args[]) throws IOException {
+
+        System.out.print("Input the filename: ");
+        Scanner input = new Scanner(System.in);
+        String filename = input.nextLine();
+        BufferedReader br = new BufferedReader(new FileReader(filename));
+        BufferedWriter wr = new BufferedWriter(new FileWriter("result.txt"));
+        for (String expression = br.readLine(); expression != null; expression = br.readLine()) {
+            if(expression.equals("")){
+                continue;
+            }
+            wr.write("*****************************\r\n");
+            expression = expression.replaceAll(" ", "");
+            if (!isWelldefined(expression)) {
+                wr.write("not well-defined\r\n");
+                continue;
+            }
+
+            //construct cst
             PropositionNode root = new PropositionNode(expression, null, null, null, false);
-            root = cst(root);
-            printCst(root);
+            root = cst(root, wr);
+            //counter example
+            PropositionNode node = counterexample(root);
+            if(node != null){
+                wr.write("counterexample\r\n");
+            }
+            while(node != null){
+                if ((Pattern.matches(p1, node.proposition) || Pattern.matches(p2, node.proposition)) && node.label) {
+                    wr.write(node.proposition+" ");
+                }
+                node = node.father;
+            }
+            wr.write("\r\n");
         }
-        else
-            System.out.println("wrong");
+        wr.close();
+        System.out.println("The result has been output into the \"result.txt\"");
+
     }
 
-    private static PropositionNode cst(PropositionNode root) {
-        // ArrayDeque<PropositionNode> queue = new ArrayDeque<>();
+    //construct cst
+    private static PropositionNode cst(PropositionNode root, BufferedWriter wr) throws IOException {
         LinkedList<PropositionNode> unreducedNodes = new LinkedList<>();
         unreducedNodes.add(root);
         while (!unreducedNodes.isEmpty()) {
             PropositionNode pNode = unreducedNodes.removeFirst();
-            PropositionNode node = pNode.copy();
-            if (pNode.isReduced)
-                continue;
             String proposition = pNode.proposition;
-            int len = proposition.length();
-            String leftProposition = "", rightProposition = "";
-            int index = 0;
-            String type = "";
-            if (Pattern.matches(p1, proposition) || Pattern.matches(p2, proposition))
-                continue;
-            if (proposition.charAt(1) == '\\') {
-                leftProposition = proposition.substring(1, len - 1);
-                type = "not";
-            }
-            if (proposition.charAt(1) == '(') {
-                index = getLeftExpressionIndex(proposition);
-                leftProposition = proposition.substring(1, index + 1);
-                switch (proposition.charAt(index + 2)) {
-                    case 'a': {
-                        type = "and";
-                        break;
-                    }
-                    case 'o': {
-                        type = "or";
-                        break;
-                    }
-                    case 'i': {
-                        type = "imply";
-                        break;
-                    }
-                    case 'e': {
-                        type = "eq";
-                    }
+            //print nodes into the file
+            if (pNode.label)
+                wr.write("T " + proposition + "\r\n");
+            else
+                wr.write("F " + proposition + "\r\n");
+            //judge whethe the node is conflicted
+            if(!pNode.isConflicted){
+                if ((Pattern.matches(p1, proposition) || Pattern.matches(p2, proposition)))
+                    pNode.isReduced = true;
+                if (!(pNode.isReduced)) {
+                    PropositionNode node = pNode.copy();
+                    reduce(pNode, node);
                 }
-                index = getRightExpressionIndex(proposition, index);
-                rightProposition = proposition.substring(index, len - 1);
+                if(pNode.left != null)
+                    unreducedNodes.add(pNode.left);
+                if(pNode.right != null)
+                    unreducedNodes.add(pNode.right);
             }
-            if (Character.isUpperCase(proposition.charAt(1))) {
-                index = getRightExpressionIndex(proposition, index);
-                rightProposition = proposition.substring(index, len - 1);
-                switch (proposition.charAt(index - 1)){
-                    case 'd':{
-                        type = "and";
-                        index = index - 4;
-                        break;
-                    }
-                    case 'r':{
-                        type = "or";
-                        index = index -3;
-                        break;
-                    }
-                    case 'y':{
-                        type = "imply";
-                        index = index -6;
-                        break;
-                    }
-                    case 'q':{
-                        type = "eq";
-                        index = index - 3;
-                        break;
-                    }
-                }
-                leftProposition = proposition.substring(1, index);
-            }
-            if (!type.equals("eq")  && !type.equals("not")) {
-                if (node.label)
-                    type = type + "T";
-                else
-                    type = type + "F";
-            }
-            pNode.type = type;
-            node.type = type;
-            node = atomicT(node, leftProposition, rightProposition);
-            reduce(root, node, unreducedNodes);
         }
-        return  root;
+        return root;
     }
-
 
     private static boolean isWelldefined(String expression) {
         if (Pattern.matches(p1, expression) || Pattern.matches(p2, expression))
@@ -121,20 +92,20 @@ public class Main {
                 if (index == -1)
                     return false;
                 rightExpression = expression.substring(index, len - 1);
-                switch (expression.charAt(index - 1)){
-                    case 'd':{
+                switch (expression.charAt(index - 1)) {
+                    case 'd': {
                         index = index - 4;
                         break;
                     }
-                    case 'r':{
-                        index = index -3;
+                    case 'r': {
+                        index = index - 3;
                         break;
                     }
-                    case 'y':{
-                        index = index -6;
+                    case 'y': {
+                        index = index - 6;
                         break;
                     }
-                    case 'q':{
+                    case 'q': {
                         index = index - 3;
                         break;
                     }
@@ -154,7 +125,6 @@ public class Main {
         }
         return false;
     }
-
 
     private static int getLeftExpressionIndex(String expression) {
         int leftP = 0;
@@ -176,7 +146,7 @@ public class Main {
     }
 
     private static int getRightExpressionIndex(String expression, int index) {
-        int index1, index2, index3, index4 ;
+        int index1, index2, index3, index4;
         if ((index1 = expression.indexOf("\\and", index)) != -1) {
             index = index1 + 4;
         } else if ((index2 = expression.indexOf("\\or", index)) != -1) {
@@ -190,106 +160,129 @@ public class Main {
         return index;
     }
 
-    private static void reduce(PropositionNode root, PropositionNode node, LinkedList<PropositionNode> unreducedNodes) {
+    private static void reduce(PropositionNode root, PropositionNode node) {
 
+        if(root.isConflicted)
+            return;
 
         if (root.proposition.equals(node.proposition) && root.label == node.label) {
-            if(root.isReduced)
+            if (root.isReduced)
                 return;
-            else{
+            else {
                 root.isReduced = true;
                 node.isReduced = true;
             }
         }
-        switch (node.type) {
-            case "orT":
-            case "implyT":
-            case "andF": {
-                if (node.left.proposition.equals(node.proposition) && node.left.label != root.label)
-                    node.left.isConflicted = true;
-                if (node.right.proposition.equals(node.proposition) && node.right.label != root.label)
-                    node.right.isConflicted = true;
-                break;
-            }
-            case "andT":
-            case "orF":
-            case "implyF": {
-                if (node.left.proposition.equals(node.proposition) && node.left.label != root.label)
-                    node.left.isConflicted = true;
-                if (node.left.left.proposition.equals(node.proposition) && node.left.left.label != root.label)
-                    node.left.left.isConflicted = true;
-                break;
-            }
-            case "not": {
-                if (node.left.proposition.equals(node.proposition) && node.left.label != root.label)
-                    node.left.isConflicted = true;
-                break;
-            }
-            case "eq": {
-                if (node.left.proposition.equals(node.proposition) && node.left.label != root.label)
-                    node.left.isConflicted = true;
-                if (node.left.left.proposition.equals(node.proposition) && node.left.left.label != root.label)
-                    node.left.left.isConflicted = true;
-                if (node.right.proposition.equals(node.proposition) && node.right.label != root.label)
-                    node.right.isConflicted = true;
-                if (node.right.left.proposition.equals(node.proposition) && node.right.left.label != root.label)
-                    node.right.left.isConflicted = true;
-                break;
-            }
-        }
+
         if (root.left == null && root.right == null && !root.isConflicted && node.isReduced) {
-            //           PropositionNode copyNode = node.copy();
+            node = atomicT(node);
             root.left = node;
             node.father = root;
-            switch (node.type) {
-                case "orT":
-                case "implyT":
-                case "andF": {
-                    if (!node.left.isConflicted)
-                        unreducedNodes.add(node.left);
-                    if (!node.right.isConflicted)
-                        unreducedNodes.add(node.right);
+            PropositionNode tNode = root;
+            while (tNode != null) {
+                if (node.proposition.equals(tNode.proposition) && node.label != tNode.label) {
+                    node.isConflicted = true;
                     break;
                 }
-                case "andT":
-                case "orF":
-                case "implyF": {
-                    if (!node.left.isConflicted)
-                        unreducedNodes.add(node.left);
-                    if (!node.left.left.isConflicted)
-                        unreducedNodes.add(node.left.left);
-                    break;
+                if (node.left != null) {
+                    if (!node.left.isConflicted && node.left.proposition.equals(tNode.proposition) && node.left.label != tNode.label)
+                        node.left.isConflicted = true;
+                    if (node.left.left != null && !node.left.left.isConflicted) {
+                        node.left.left.isConflicted = node.left.isConflicted;
+                        if (node.left.left.proposition.equals(tNode.proposition) && node.left.left.label != tNode.label)
+                            node.left.left.isConflicted = true;
+                    }
                 }
-                case "not": {
-                    if (!node.left.isConflicted)
-                        unreducedNodes.add(node.left);
-                    break;
+
+                if (node.right != null) {
+                    if (!node.right.isConflicted && node.right.proposition.equals(tNode.proposition) && node.right.label != tNode.label)
+                        node.right.isConflicted = true;
+                    if (node.right.left != null && !node.right.left.isConflicted) {
+                        node.right.left.isConflicted = node.right.isConflicted;
+                        if (node.right.left.proposition.equals(tNode.proposition) && node.right.left.label != tNode.label)
+                            node.right.left.isConflicted = true;
+                    }
                 }
-                case "eq": {
-                    if (!node.left.isConflicted)
-                        unreducedNodes.add(node.left);
-                    if (!node.right.isConflicted)
-                        unreducedNodes.add(node.right);
-                    if (!node.left.left.isConflicted)
-                        unreducedNodes.add(node.left.left);
-                    if (!node.right.left.isConflicted)
-                        unreducedNodes.add(node.right.left);
-                    break;
-                }
+                tNode = tNode.father;
             }
             return;
         }
         if (root.left != null) {
-            reduce(root.left, node.copyWithChildren(), unreducedNodes);
+            reduce(root.left, node.copy());
         }
         if (root.right != null) {
-            reduce(root.right, node.copyWithChildren(), unreducedNodes);
+            reduce(root.right, node.copy());
         }
     }
 
+    private static PropositionNode atomicT(PropositionNode node) {
+        String proposition = node.proposition;
+        int len = proposition.length();
+        String leftProposition = "", rightProposition = "";
+        int index = 0;
+        String type = "";
+        if (proposition.charAt(1) == '\\') {
+            leftProposition = proposition.substring(5, len - 1);
+            type = "not";
+        }
+        if (proposition.charAt(1) == '(') {
+            index = getLeftExpressionIndex(proposition);
+            leftProposition = proposition.substring(1, index + 1);
+            switch (proposition.charAt(index + 2)) {
+                case 'a': {
+                    type = "and";
+                    break;
+                }
+                case 'o': {
+                    type = "or";
+                    break;
+                }
+                case 'i': {
+                    type = "imply";
+                    break;
+                }
+                case 'e': {
+                    type = "eq";
+                }
+            }
+            index = getRightExpressionIndex(proposition, index);
+            rightProposition = proposition.substring(index, len - 1);
+        }
+        if (Character.isUpperCase(proposition.charAt(1))) {
+            index = getRightExpressionIndex(proposition, index);
+            rightProposition = proposition.substring(index, len - 1);
+            switch (proposition.charAt(index - 1)) {
+                case 'd': {
+                    type = "and";
+                    index = index - 4;
+                    break;
+                }
+                case 'r': {
+                    type = "or";
+                    index = index - 3;
+                    break;
+                }
+                case 'y': {
+                    type = "imply";
+                    index = index - 6;
+                    break;
+                }
+                case 'q': {
+                    type = "eq";
+                    index = index - 3;
+                    break;
+                }
+            }
+            leftProposition = proposition.substring(1, index);
+        }
+        if (!type.equals("eq") && !type.equals("not")) {
+            if (node.label)
+                type = type + "T";
+            else
+                type = type + "F";
+        }
 
-    private static PropositionNode atomicT(PropositionNode node, String leftProposition, String rightProposition) {
-        switch (node.type) {
+        switch (type) {
             case "implyT": {
                 PropositionNode lNode = new PropositionNode(leftProposition, false, false, "", false);
                 PropositionNode rNode = new PropositionNode(rightProposition, false, false, "", true);
@@ -301,7 +294,6 @@ public class Main {
             }
             case "orT":
             case "andF": {
-                //  PropositionNode node = new PropositionNode(this.proposition, this.isConflicted, this.isReduced, this.type, this.label);
                 PropositionNode lNode = new PropositionNode(leftProposition, false, false, "", node.label);
                 PropositionNode rNode = new PropositionNode(rightProposition, false, false, "", node.label);
                 node.left = lNode;
@@ -321,7 +313,6 @@ public class Main {
                 break;
             }
             case "implyF": {
-                // PropositionNode node = new PropositionNode(this.proposition, this.isConflicted, this.isReduced, this.type, this.label);
                 PropositionNode lNode = new PropositionNode(leftProposition, false, false, "", true);
                 PropositionNode llNode = new PropositionNode(rightProposition, false, false, "", false);
                 node.left = lNode;
@@ -331,14 +322,12 @@ public class Main {
                 break;
             }
             case "not": {
-                //    PropositionNode node = new PropositionNode(this.proposition, this.isConflicted, this.isReduced, this.type, this.label);
                 PropositionNode lNode = new PropositionNode(leftProposition, false, false, "", !node.label);
                 node.left = lNode;
                 lNode.father = node;
                 break;
             }
             case "eq": {
-                //   PropositionNode node = new PropositionNode(this.proposition, this.isConflicted, this.isReduced, this.type, this.label);
                 PropositionNode lNode1 = new PropositionNode(leftProposition, false, false, "", true);
                 PropositionNode lNode2 = new PropositionNode(leftProposition, false, false, "", false);
                 PropositionNode rNode1 = new PropositionNode(rightProposition, false, false, "", true);
@@ -364,27 +353,19 @@ public class Main {
         return node;
     }
 
-    private static void printCst(PropositionNode root){
-        ArrayDeque<PropositionNode> deque = new ArrayDeque<>();
-        PropositionNode nullNode = new PropositionNode("", null, null, null, false);
-        deque.add(root);
-        deque.add(nullNode);
-        while(deque.size() != 1){
-            PropositionNode node = deque.removeFirst();
-            if(node == nullNode){
-                deque.add(nullNode);
-                System.out.println();
-                continue;
-            }
-
-            System.out.print(node.label + node.proposition + "  ");
-            if(node.left != null){
-                deque.add(node.left);
-                if(node.right != null){
-                    deque.add(node.right);
-                }
-
-            }
+    private static PropositionNode counterexample(PropositionNode root){
+        if(root.isConflicted){
+            return null;
+        }
+        if(root.left == null && root.right == null)
+            return root;
+        else if(root.right != null){
+            PropositionNode rnode = counterexample(root.right);
+            if(rnode == null)
+                return counterexample(root.left);
+            return rnode;
+        }else{
+            return counterexample(root.left);
         }
     }
 }
